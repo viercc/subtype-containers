@@ -1,0 +1,5 @@
+packages: .
+optional-packages: example
+
+package subtype-containers
+    ghc-options: -Wall -Wcompat -Werror

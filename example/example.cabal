@@ -1,0 +1,19 @@
+cabal-version: 2.2
+name:                example
+version:             0
+author:              Koji Miyazato
+maintainer:          viercc@gmail.com
+build-type:          Simple
+
+executable example
+  hs-source-dirs: .
+  main-is:
+    Example.hs
+  other-modules:
+    Digits
+  build-depends: base,
+                 reflection,
+                 coercible-subtypes,
+                 subtype-containers
+  default-language: Haskell2010
+  ghc-options: -Wall

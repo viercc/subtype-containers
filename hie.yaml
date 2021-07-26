@@ -1,0 +1,6 @@
+cradle:
+  cabal:
+    - path: "./src"
+      component: "lib:subtype-containers"
+    - path: "./example"
+      component: "exe:example"
