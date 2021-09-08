@@ -8,7 +8,7 @@ import Data.Type.Coercion.Sub
 
 -- Digits is a String where all characters are digits
 newtype Digits = Digits String
-  deriving (Eq, Ord, Show)
+  deriving (Show)
 
 -- A Digits is a String, but not the other way around!
 unDigits :: Sub Digits String
