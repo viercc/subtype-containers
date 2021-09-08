@@ -7,9 +7,9 @@
 {-# LANGUAGE RoleAnnotations #-}
 {-# LANGUAGE UndecidableInstances #-}
 module Newtype.Set(
-    Set(), toRawSet, fromRawSet, raw, relax,
+    Set(), toRawSet, extractSub, relax,
 
-    empty, singleton,
+    empty, singleton, fromRawSet,
 
     fromList, 
     fromAscList,
@@ -17,7 +17,7 @@ module Newtype.Set(
 
     insert, delete, alterF,
 
-    umember, unotMember, member, notMember, membership,
+    member, notMember, membership,
 
     ulookupLT, ulookupGT, ulookupLE, ulookupGE,
     lookupLT, lookupGT, lookupLE, lookupGE,
@@ -30,10 +30,14 @@ module Newtype.Set(
     lookupIndex, elemAt, deleteAt,
     take, drop,
 
-    union, 
+    union,
+    UnionSet(..),
+    tightUnion,
+
     intersection,
     IntersectionSet(..),
     tightIntersection,
+
     difference, (\\),
     cartesianProduct,
     disjointUnion,
@@ -48,157 +52,139 @@ import qualified Data.Maybe (mapMaybe)
 
 import Control.Category
 import Data.Type.Coercion.Sub
-import Data.Reflection (Given(..), give)
+import Data.Type.Coercion.Sub.Internal
+import Data.Type.Coercion
 
 import Newtype.Set.Internal
-
-import Newtype.Utils
-
-fromRawSet :: Data.Set u -> Set u u
-fromRawSet = Mk
-
-relax :: Given (Sub k' u) => Sub k k' -> Sub (Set u k) (Set u k')
-relax !_ = sub
-
-raw :: Sub (Set u k) (Data.Set u)
-raw = sub
+import Newtype.Union ( IsUnion, greater )
+import Newtype.Intersection ( IsIntersection, lesser )
 
 -- * Primitive construction
 
-empty :: Given (Sub k u) => Set u k
-empty = coerce Data.empty
+empty :: Sub k u -> Set u k
+empty (Sub Coercion) = Mk Data.empty
 
-singleton :: Given (Sub k u) => k -> Set u k
-singleton = upcastWith (given /->/ sub) Data.singleton
-
--- fromSet :: Given (Sub k u) => Newtype.Set u k -> Set u k
+singleton :: Sub k u -> k -> Set u k
+singleton (Sub Coercion) k = Mk (coerce Data.singleton k)
 
 -- * Construction from lists
 
-repFromList :: Given (Sub k u) => Sub ([u] -> Data.Set u) ([k] -> Set u k)
-repFromList = mapR given /->/ sub
+fromList :: (Ord u) => Sub k u -> [k] -> Set u k
+fromList (Sub Coercion) ks = Mk (coerce Data.fromList ks)
 
-fromList :: (Given (Sub k u), Ord u) => [k] -> Set u k
-fromList = upcastWith repFromList Data.fromList
+fromAscList :: (Eq u) => Sub k u -> [k] -> Set u k
+fromAscList (Sub Coercion) ks = Mk (coerce Data.fromAscList ks)
 
-fromAscList :: (Given (Sub k u), Eq u) => [k] -> Set u k
-fromAscList = upcastWith repFromList Data.fromAscList
-
-fromDistinctAscList :: (Given (Sub k u)) => [k] -> Set u k
-fromDistinctAscList = upcastWith repFromList Data.fromDistinctAscList
+fromDistinctAscList :: Sub k u -> [k] -> Set u k
+fromDistinctAscList (Sub Coercion) ks = Mk (coerce Data.fromDistinctAscList ks)
 
 -- * Insertion/Deletion
 
-insert :: (Given (Sub k u), Ord u) => k -> Set u k -> Set u k
-insert = upcastWith (given /->/ sub) Data.insert
+insert :: (Ord u) => k -> Set u k -> Set u k
+insert k (Mk us) = Mk (coerce Data.insert k us)
 
-delete :: (Given (Sub k u), Ord u) => k -> Set u k -> Set u k
-delete = upcastWith (given /->/ sub) Data.delete
+delete :: (Ord u) => k -> Set u k -> Set u k
+delete k (Mk us) = Mk (coerce Data.delete k us)
 
-alterF :: (Given (Sub k u), Ord u, Functor f) => (Bool -> f Bool) -> k -> Set u k -> f (Set u k)
-alterF = (fmap . fmap . fmap . fmap) coerce . upcastWith rep $ Data.alterF
-  where
-    rep = id /->/ given /->/ sub /->/ id
+alterF :: (Ord u, Functor f) => (Bool -> f Bool) -> k -> Set u k -> f (Set u k)
+alterF f k (Mk us) = Mk <$> Data.alterF f (coerce k) us
 
 -- * Query
 
-umember, unotMember :: (Ord u) => u -> Set u k -> Bool
-umember = coerce Data.member
-unotMember = coerce Data.member
+member, notMember :: (Ord u) => k -> Set u k -> Bool
+member k (Mk us) = coerce Data.member k us
+notMember k = not . member k
 
-member, notMember :: (Given (Sub k u), Ord u) => k -> Set u k -> Bool
-member = upcastWith (given /->/ id) umember
-notMember = upcastWith (given /->/ id) unotMember
-
-membership :: (Given (Sub k u), Ord u) => u -> Set u k -> Maybe k
-membership u s = upcastWith (mapR ungiven) $
-  if Data.member u (coerce s) then Just u else Nothing
-
-repLookupXX :: (Given (Sub k u))
-  => Sub (u -> Data.Set u -> Maybe u)
-         (u -> Set u k -> Maybe k)
-repLookupXX = id /->/ sub /->/ mapR ungiven
+membership :: (Ord u) => u -> Set u k -> Maybe k
+membership u (Mk us) = coerce $ if Data.member u us then Just u else Nothing
 
 ulookupLT, ulookupGT, ulookupLE, ulookupGE
-  :: (Given (Sub k u), Ord u) => u -> Set u k -> Maybe k
-ulookupLT = upcastWith repLookupXX Data.lookupLT
-ulookupGT = upcastWith repLookupXX Data.lookupGT
-ulookupLE = upcastWith repLookupXX Data.lookupLE
-ulookupGE = upcastWith repLookupXX Data.lookupGE
+  :: (Ord u) => u -> Set u k -> Maybe k
+ulookupLT u (Mk us) = coerce Data.lookupLT u us
+ulookupLE u (Mk us) = coerce Data.lookupLE u us
+ulookupGT u (Mk us) = coerce Data.lookupGT u us
+ulookupGE u (Mk us) = coerce Data.lookupGE u us
 
 lookupLT, lookupGT, lookupLE, lookupGE
-  :: (Given (Sub k u), Ord u) => k -> Set u k -> Maybe k
-lookupLT = upcastWith (given /->/ id) ulookupLT
-lookupGT = upcastWith (given /->/ id) ulookupGT
-lookupLE = upcastWith (given /->/ id) ulookupLE
-lookupGE = upcastWith (given /->/ id) ulookupGE
+  :: (Ord u) => k -> Set u k -> Maybe k
+lookupLT k (Mk us) = coerce Data.lookupLT k us
+lookupLE k (Mk us) = coerce Data.lookupLE k us
+lookupGT k (Mk us) = coerce Data.lookupGT k us
+lookupGE k (Mk us) = coerce Data.lookupGE k us
 
 -- * Size
 null :: Set u k -> Bool
-null = coerce Data.null
+null = Data.null . toRawSet
 
 size :: Set u k -> Int
-size = coerce Data.size
+size = Data.size . toRawSet
 
 -- * Converting to
-elems, toAscList, toDescList :: Given (Sub k u) => Set u k -> [k]
-elems = upcastWith (sub /->/ mapR ungiven) Data.elems
-toAscList = upcastWith (sub /->/ mapR ungiven) Data.toAscList
-toDescList = upcastWith (sub /->/ mapR ungiven) Data.toDescList
+elems, toList, toDescList :: Set u k -> [k]
+elems = toAscList
+toList = toAscList
+toDescList (Mk us) = coerce $ Data.toDescList us
 
 -- * Filter
 
-filter :: (Given (Sub k u), Ord u) => (k -> Bool) -> Set u k -> Set u k
-filter = upcastWith ((ungiven /->/ id) /->/ sub) Data.filter
+filter :: (Ord u) => (k -> Bool) -> Set u k -> Set u k
+filter f (Mk us) = Mk (Data.filter (coerce f) us)
 
-map :: (Given (Sub k u), Given (Sub k' u), Ord u) => (k -> k') -> Set u k -> Set u k'
-map = upcastWith ((ungiven /->/ given) /->/ sub) Data.map
+map :: (Ord u') => Sub k' u' -> (k -> k') -> Set u k -> Set u' k'
+map (Sub Coercion) f (Mk us) = Mk (Data.map (coerce f) us)
 
-mapMaybe :: (Given (Sub k u), Given (Sub k' u), Ord u) => (k -> Maybe k') -> Set u k -> Set u k'
-mapMaybe f s = fromList $ Data.Maybe.mapMaybe f (toList s)
+mapMaybe :: (Ord u') => Sub k' u' -> (k -> Maybe k') -> Set u k -> Set u' k'
+mapMaybe k'u' f = fromList k'u' . Data.Maybe.mapMaybe f . toList
 
 -- * Indexed
 
-lookupIndex :: (Given (Sub k u), Ord u) => k -> Set u k -> Maybe Int
-lookupIndex = upcastWith (given /->/ sub) Data.lookupIndex
+lookupIndex :: (Ord u) => u -> Set u k -> Maybe Int
+lookupIndex u (Mk us) = Data.lookupIndex u us
 
-elemAt :: (Given (Sub k u)) => Int -> Set u k -> k
-elemAt = upcastWith (id /->/ sub /->/ ungiven) Data.elemAt
+elemAt :: Int -> Set u k -> k
+elemAt i (Mk us) = coerce $ Data.elemAt i us
 
-deleteAt :: (Given (Sub k u), Ord u) => Int -> Set u k -> Set u k
-deleteAt = coerce Data.deleteAt
+deleteAt :: (Ord u) => Int -> Set u k -> Set u k
+deleteAt i (Mk us) = Mk (Data.deleteAt i us)
 
-take, drop :: (Given (Sub k u), Ord u) => Int -> Set u k -> Set u k
-take = coerce Data.take
-drop = coerce Data.drop
+take, drop :: (Ord u) => Int -> Set u k -> Set u k
+take i (Mk us) = Mk (Data.take i us)
+drop i (Mk us) = Mk (Data.drop i us)
 
 -- * Combine
-union :: (Given (Sub k u), Ord u) => Set u k -> Set u k -> Set u k
-union = coerce Data.union
+union :: (Ord u) => Set u k -> Set u k -> Set u k
+union (Mk xs) (Mk ys) = Mk (Data.union xs ys)
 
-intersection :: (Given (Sub k u), Ord u) => Set u k -> Set u k' -> Set u k
-intersection = coerce Data.intersection
+data UnionSet u x y where
+    UnionSet :: IsUnion x y z -> Set u z -> UnionSet u k k'
 
-data IntersectionSet u k k' where
-    IntersectionSet :: Given (Sub k'' u) => Sub k'' k -> Sub k'' k' -> Set u k'' -> IntersectionSet u k k'
+tightUnion :: forall u x y. (Ord u) => Set u x -> Set u y -> UnionSet u x y
+tightUnion (Mk xs) (Mk ys) =
+  let zs = Mk (Data.union xs ys) :: Set u y
+  in UnionSet (greater sub :: IsUnion x y y) zs
 
-tightIntersection :: forall k k' u.
-     (Given (Sub k u), Given (Sub k' u), Ord u)
-  => Set u k -> Set u k' -> IntersectionSet u k k'
-tightIntersection ma mb =
-  let mc = Mk (Data.intersection (coerce ma) (coerce mb)) :: Set u u
-  in give (id :: Sub u u) (IntersectionSet (ungiven :: Sub u k) (ungiven :: Sub u k') mc)
+intersection :: (Ord u) => Set u k -> Set u k' -> Set u k
+intersection (Mk xs) (Mk ys) = Mk (Data.intersection xs ys)
 
-difference :: (Given (Sub k u), Ord u) => Set u k -> Set u k' -> Set u k
-difference = coerce Data.difference
+data IntersectionSet u x y where
+    IntersectionSet :: IsIntersection x y z -> Set u z -> IntersectionSet u x y
 
-(\\) :: (Given (Sub k u), Ord u) => Set u k -> Set u k -> Set u k
+tightIntersection :: forall x y u.
+     (Ord u) => Set u x -> Set u y -> IntersectionSet u x y
+tightIntersection (Mk xs) (Mk ys) =
+  let zs = Mk (Data.intersection xs ys) :: Set u x
+  in IntersectionSet (lesser sub :: IsIntersection x y x) zs
+
+difference :: (Ord u) => Set u k -> Set u k' -> Set u k
+difference (Mk xs) (Mk ys) = Mk (xs Data.\\ ys)
+
+(\\) :: (Ord u) => Set u k -> Set u k -> Set u k
 (\\) = difference
 
 infixl 9 \\
 
 cartesianProduct :: Set u a -> Set v b -> Set (u,v) (a,b)
-cartesianProduct = coerce Data.cartesianProduct
+cartesianProduct (Mk us) (Mk vs) = Mk (Data.cartesianProduct us vs)
 
 disjointUnion :: Set u a -> Set v b -> Set (Either u v) (Either a b)
-disjointUnion = coerce Data.disjointUnion
+disjointUnion (Mk us) (Mk vs) = Mk (Data.disjointUnion us vs)

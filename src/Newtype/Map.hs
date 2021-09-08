@@ -6,18 +6,17 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RoleAnnotations #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE TupleSections #-}
 module Newtype.Map(
-    Map(), toRawMap, fromRawMap, raw, relaxKey,
+    Map(), toRawMap, extractSub, fromRawMap, relaxKey,
 
     empty, singleton, fromSet,
 
     fromList, fromListWith, fromListWithKey,
-    fromListWithKey_safe,
     fromAscList,
     fromDistinctAscList,
 
     insert, insertWith, insertWithKey,
-    insertWithKey_safe,
     insertLookupWithKey,
 
     delete, adjust, update, updateLookupWithKey,
@@ -26,7 +25,7 @@ module Newtype.Map(
     ulookup, ulookupAndKey,
     lookup, (!?), (!),
     findWithDefault,
-    membership, umember, unotMember, member, notMember,
+    membership, member, notMember,
 
     ulookupLT, ulookupGT, ulookupLE, ulookupGE,
     lookupLT, lookupGT, lookupLE, lookupGE,
@@ -45,6 +44,9 @@ module Newtype.Map(
     restrictKeysBy, restrictKeysTo, tightRestrictKeys, withoutKeys,
 
     union, unionWith,
+    UnionMap(..),
+    tightUnionWith,
+    
     intersection,
     intersectionWith,
     IntersectionMap(..),
@@ -61,7 +63,8 @@ import qualified Data.Map.Lazy as Data
 
 import Control.Category
 import Data.Type.Coercion.Sub
-import Data.Reflection (Given(..), give)
+import Data.Type.Coercion.Sub.Internal ( Sub(Sub) )
+import Data.Type.Coercion ( Coercion(Coercion) )
 import Data.Maybe (fromMaybe)
 import qualified Data.Foldable as F
 
@@ -69,289 +72,237 @@ import Newtype.Set (Set)
 import qualified Newtype.Set.Internal as Set
 
 import Newtype.Map.Internal
-import Newtype.Utils
-
-fromRawMap :: Data.Map u a -> Map u u a
-fromRawMap = Mk
-
-relaxKey :: Given (Sub k' u) => Sub k k' -> Sub (Map u k a) (Map u k' a)
-relaxKey !_ = sub
-
-raw :: Sub (Map u k a) (Data.Map u a)
-raw = sub
+import Newtype.Union ( IsUnion, greater )
+import Newtype.Intersection ( IsIntersection, lesser )
 
 -- * Primitive construction
 
-empty :: Given (Sub k u) => Map u k a
-empty = coerce1 Data.empty
+empty :: Sub k u -> Map u k a
+empty (Sub Coercion) = Mk Data.empty
 
-singleton :: Given (Sub k u) => k -> a -> Map u k a
-singleton = upcastWith (given /->/ id /->/ rep1) Data.singleton
+singleton :: Sub k u -> k -> a -> Map u k a
+singleton (Sub Coercion) k a = Mk (Data.singleton (coerce k) a)
 
-fromSet :: Given (Sub k u) => (k -> a) -> Set u k -> Map u k a
-fromSet = upcastWith ((ungiven /->/ id) /->/ sub /->/ rep1) Data.fromSet
+fromSet :: (k -> a) -> Set u k -> Map u k a
+fromSet f (Set.Mk us) = Mk (Data.fromSet (coerce f) us)
 
 -- * Construction from lists
 
-repFromList :: Given (Sub k u) => Sub ([(u,a)] -> Data.Map u a) ([(k,a)] -> Map u k a)
-repFromList = mapR (bimapR given id) /->/ sub
+fromList :: (Ord u) => Sub k u -> [(k,a)] -> Map u k a
+fromList (Sub Coercion) kas = Mk (Data.fromList (coerce kas))
 
-fromList :: (Given (Sub k u), Ord u) => [(k,a)] -> Map u k a
-fromList = upcastWith repFromList Data.fromList
+fromListWith :: (Ord u) => Sub k u -> (a -> a -> a) -> [(k,a)] -> Map u k a
+fromListWith (Sub Coercion) op kas = Mk (Data.fromListWith op (coerce kas))
 
-fromListWith :: (Given (Sub k u), Ord u) => (a -> a -> a) -> [(k,a)] -> Map u k a
-fromListWith = upcastWith (mapR repFromList) Data.fromListWith
+fromListWithKey :: (Ord u)
+  => Sub k u -> (k -> a -> a -> a) -> [(k,a)] -> Map u k a
+fromListWithKey (Sub Coercion) op kas = Mk (Data.fromListWithKey (coerce op) (coerce kas))
 
-fromListWithKey :: (Given (Sub k u), Ord u)
-  => (k -> a -> a -> a) -> [(k,a)] -> Map u k a
-fromListWithKey = upcastWith ((ungiven /->/ id) /->/ repFromList) Data.fromListWithKey
+fromAscList :: (Eq u) => Sub k u -> [(k,a)] -> Map u k a
+fromAscList (Sub Coercion) kas = Mk (Data.fromAscList (coerce kas))
 
--- | The usage of unsafe 'ungiven' in 'fromListWithKey' is OK
-fromListWithKey_safe :: (Given (Sub k u), Ord u)
-  => (k -> a -> a -> a) -> [(k,a)] -> Map u k a
-fromListWithKey_safe f kas = fst <$> fromListWith g (listened <$> kas)
-  where
-    g (x,op) (y,_) = (op x y, op)
-    listened (k,a) = (k, (a,f k))
-
-fromAscList :: (Given (Sub k u), Eq u) => [(k,a)] -> Map u k a
-fromAscList = upcastWith repFromList Data.fromAscList
-
-fromDistinctAscList :: (Given (Sub k u)) => [(k,a)] -> Map u k a
-fromDistinctAscList = upcastWith repFromList Data.fromDistinctAscList
+fromDistinctAscList :: Sub k u -> [(k,a)] -> Map u k a
+fromDistinctAscList (Sub Coercion) kas = Mk (Data.fromDistinctAscList (coerce kas))
 
 -- * Insertion
-repInsert :: Given (Sub k u)
-  => Sub (u -> a -> Data.Map u a -> Data.Map u a)
-         (k -> a -> Map u k a -> Map u k a)
-repInsert = given /->/ sub
 
-insert :: (Given (Sub k u), Ord u) => k -> a -> Map u k a -> Map u k a
-insert = upcastWith repInsert Data.insert
+insert :: (Ord u) => k -> a -> Map u k a -> Map u k a
+insert k a (Mk ma) = Mk (Data.insert (coerce k) a ma)
 
-insertWith :: (Given (Sub k u), Ord u)
+insertWith :: (Ord u)
   => (a -> a -> a) -> k -> a -> Map u k a -> Map u k a
-insertWith = upcastWith (id /->/ repInsert) Data.insertWith
+insertWith op k a (Mk ma) = Mk (Data.insertWith op (coerce k) a ma)
 
-insertWithKey :: (Given (Sub k u), Ord u)
+insertWithKey :: (Ord u)
   => (k -> a -> a -> a) -> k -> a -> Map u k a -> Map u k a
-insertWithKey = upcastWith ((ungiven /->/ id) /->/ repInsert) Data.insertWithKey
+insertWithKey op k a (Mk ma) = Mk (Data.insertWithKey (coerce op) (coerce k) a ma)
 
--- | The usage of unsafe 'ungiven' in 'fromListWithKey' is OK
-insertWithKey_safe :: (Given (Sub k u), Ord u)
-  => (k -> a -> a -> a) -> k -> a -> Map u k a -> Map u k a
-insertWithKey_safe f k = insertWith (f k) k
-
-insertLookupWithKey :: (Given (Sub k u), Ord u)
+insertLookupWithKey :: (Ord u)
   => (k -> a -> a -> a) -> k -> a -> Map u k a -> (Maybe a, Map u k a)
-insertLookupWithKey = upcastWith rep Data.insertLookupWithKey
-  where
-    rep = (ungiven /->/ id) /->/ given /->/ sub
+insertLookupWithKey op k a (Mk ma) = case Data.insertLookupWithKey (coerce op) (coerce k) a ma of
+  ~(resp, ma') -> (resp, Mk ma')
 
 -- * Deletion/Update
 
-repDelete :: (Given (Sub k u), Ord u)
-  => Sub (u -> Data.Map u a -> Data.Map u a)
-         (k -> Map u k a -> Map u k a)
-repDelete = given /->/ sub
+delete :: (Ord u) => k -> Map u k a -> Map u k a
+delete k (Mk ma) = Mk (Data.delete (coerce k) ma)
 
-delete :: (Given (Sub k u), Ord u) => k -> Map u k a -> Map u k a
-delete = upcastWith repDelete Data.delete
+adjust :: (Ord u) => (a -> a) -> k -> Map u k a -> Map u k a
+adjust f k (Mk ma) = Mk (Data.adjust f (coerce k) ma)
 
-adjust :: (Given (Sub k u), Ord u) => (a -> a) -> k -> Map u k a -> Map u k a
-adjust = upcastWith (id /->/ repDelete) Data.adjust
+update :: (Ord u) => (a -> Maybe a) -> k -> Map u k a -> Map u k a
+update f k (Mk ma) = Mk (Data.update f (coerce k) ma)
 
-update :: (Given (Sub k u), Ord u) => (a -> Maybe a) -> k -> Map u k a -> Map u k a
-update = upcastWith (id /->/ repDelete) Data.update
-
-updateLookupWithKey :: (Given (Sub k u), Ord u)
+updateLookupWithKey :: (Ord u)
  => (k -> a -> Maybe a) -> k -> Map u k a -> (Maybe a, Map u k a)
-updateLookupWithKey = upcastWith rep Data.updateLookupWithKey
-  where
-    rep = (ungiven /->/ id) /->/ given /->/ sub
+updateLookupWithKey f k (Mk ma) = case Data.updateLookupWithKey (coerce f) (coerce k) ma of
+  ~(resp, ma') -> (resp, Mk ma')
 
-alter :: (Given (Sub k u), Ord u) => (Maybe a -> Maybe a) -> k -> Map u k a -> Map u k a
-alter = upcastWith (id /->/ repDelete) Data.alter
+alter :: (Ord u) => (Maybe a -> Maybe a) -> k -> Map u k a -> Map u k a
+alter f k (Mk ma) = Mk (Data.alter f (coerce k) ma)
 
-alterF :: (Given (Sub k u), Ord u, Functor f)
+alterF :: (Ord u, Functor f)
   => (Maybe a -> f (Maybe a)) -> k -> Map u k a -> f (Map u k a)
-alterF = (fmap . fmap . fmap . fmap) coerce1 . upcastWith rep $ Data.alterF
-  where
-    rep = id /->/ given /->/ rep1 /->/ id
+alterF f k (Mk ma) = Mk <$> Data.alterF f (coerce k) ma
 
 -- * Query
 
-lookup :: (Given (Sub k u), Ord u) => k -> Map u k a -> Maybe a
-lookup = upcastWith (given /->/ id) ulookup
+lookup :: (Ord u) => k -> Map u k a -> Maybe a
+lookup k (Mk ma) = Data.lookup (coerce k) ma
 
 ulookup :: (Ord u) => u -> Map u k a -> Maybe a
-ulookup = upcastWith (id /->/ rep1 /->/ id) Data.lookup
+ulookup u (Mk ma) = Data.lookup u ma
 
-ulookupAndKey :: (Given (Sub k u), Ord u) => u -> Map u k a -> Maybe (k, a)
-ulookupAndKey u ma = upcastWith (mapR (bimapR ungiven id)) $ (,) u <$> Data.lookup u (coerce1 ma)
+ulookupAndKey :: (Ord u) => u -> Map u k a -> Maybe (k, a)
+ulookupAndKey u (Mk ma) = (coerce u, ) <$> Data.lookup u ma
 
-(!?) :: (Given (Sub k u), Ord u) => Map u k a -> k -> Maybe a
+(!?) :: (Ord u) => Map u k a -> k -> Maybe a
 (!?) = flip lookup
 
-(!) :: (Given (Sub k u), Ord u) => Map u k a -> k -> a
+(!) :: (Ord u) => Map u k a -> k -> a
 (!) m k = fromMaybe (error "element not in the Map") $ lookup k m
 
-findWithDefault :: (Given (Sub k u), Ord u) => a -> k -> Map u k a -> a
+findWithDefault :: (Ord u) => a -> k -> Map u k a -> a
 findWithDefault a k m = fromMaybe a $ lookup k m
 
-membership :: (Given (Sub k u), Ord u) => u -> Map u k a -> Maybe k
-membership u ma = upcastWith (mapR ungiven) $
-  if Data.member u (coerce1 ma) then Just u else Nothing
+membership :: (Ord u) => u -> Map u k a -> Maybe k
+membership u (Mk ma) = coerce $ if Data.member u ma then Just u else Nothing
 
-umember, unotMember :: (Ord u) => u -> Map u k a -> Bool
-umember = upcastWith (id /->/ rep1 /->/ id) Data.member
-unotMember = upcastWith (id /->/ rep1 /->/ id) Data.member
-
-member, notMember :: (Given (Sub k u), Ord u) => k -> Map u k a -> Bool
-member = upcastWith (given /->/ id) umember
-notMember = upcastWith (given /->/ id) unotMember
-
-repLookupXX :: (Given (Sub k u))
-  => Sub (u -> Data.Map u a -> Maybe (u,a))
-         (u -> Map u k a -> Maybe (k,a))
-repLookupXX = mapR (rep1 /->/ mapR (bimapR ungiven id))
+member, notMember :: (Ord u) => k -> Map u k a -> Bool
+member k (Mk ma) = Data.member (coerce k) ma
+notMember k = not . member k
 
 ulookupLT, ulookupGT, ulookupLE, ulookupGE
-  :: (Given (Sub k u), Ord u) => u -> Map u k a -> Maybe (k,a)
-ulookupLT = upcastWith repLookupXX Data.lookupLT
-ulookupGT = upcastWith repLookupXX Data.lookupGT
-ulookupLE = upcastWith repLookupXX Data.lookupLE
-ulookupGE = upcastWith repLookupXX Data.lookupGE
+  :: (Ord u) => u -> Map u k a -> Maybe (k,a)
+ulookupLT u (Mk ma) = coerce $ Data.lookupLT u ma
+ulookupGT u (Mk ma) = coerce $ Data.lookupGT u ma
+ulookupLE u (Mk ma) = coerce $ Data.lookupLE u ma
+ulookupGE u (Mk ma) = coerce $ Data.lookupGE u ma
 
 lookupLT, lookupGT, lookupLE, lookupGE
-  :: (Given (Sub k u), Ord u) => k -> Map u k a -> Maybe (k,a)
-lookupLT = upcastWith (given /->/ id) ulookupLT
-lookupGT = upcastWith (given /->/ id) ulookupGT
-lookupLE = upcastWith (given /->/ id) ulookupLE
-lookupGE = upcastWith (given /->/ id) ulookupGE
+  :: (Ord u) => k -> Map u k a -> Maybe (k,a)
+lookupLT k (Mk ma) = coerce $ Data.lookupLT (coerce k) ma
+lookupGT k (Mk ma) = coerce $ Data.lookupGT (coerce k) ma
+lookupLE k (Mk ma) = coerce $ Data.lookupLE (coerce k) ma
+lookupGE k (Mk ma) = coerce $ Data.lookupGE (coerce k) ma
 
 -- * Size
 null :: Map u k a -> Bool
-null = upcastWith (rep1 /->/ id) Data.null
+null = Data.null . toRawMap
 
 size :: Map u k a -> Int
-size = upcastWith (rep1 /->/ id) Data.size
+size = Data.size . toRawMap
 
 -- * Conversion
 
 elems :: Map u k a -> [a]
 elems = F.toList
 
-keys :: (Given (Sub k u)) => Map u k a -> [k]
-keys = upcastWith (rep1 /->/ mapR ungiven) Data.keys
+keys :: Map u k a -> [k]
+keys (Mk ma) = coerce $ Data.keys ma
 
-assocsRep :: Given (Sub k u)
-  => Sub (Data.Map u a -> [(u,a)])
-         (Map u k a -> [(k,a)])
-assocsRep = rep1 /->/ mapR (bimapR ungiven id)
+assocs :: Map u k a -> [(k,a)]
+assocs = toAscList
 
-assocs :: Given (Sub k u) => Map u k a -> [(k,a)]
-assocs = upcastWith assocsRep Data.assocs
+keysSet :: Map u k a -> Set u k
+keysSet (Mk ma) = Set.Mk (Data.keysSet ma)
 
-keysSet :: Given (Sub k u) => Map u k a -> Set u k
-keysSet = upcastWith (rep1 /->/ sub) Data.keysSet
+toList :: Map u k a -> [(k,a)]
+toList = toAscList
 
-toList :: Given (Sub k u) => Map u k a -> [(k,a)]
-toList = assocs
-
-toAscList :: Given (Sub k u) => Map u k a -> [(k,a)]
-toAscList = upcastWith assocsRep Data.toAscList
-
-toDescList :: Given (Sub k u) => Map u k a -> [(k,a)]
-toDescList = upcastWith assocsRep Data.toDescList
+toDescList :: Map u k a -> [(k,a)]
+toDescList (Mk ma) = coerce $ Data.toDescList ma
 
 -- * Traversal/Map
 map :: (a -> b) -> Map u k a -> Map u k b
 map = fmap
 
-mapWithKey :: (Given (Sub k u)) => (k -> a -> b) -> Map u k a -> Map u k b
-mapWithKey = upcastWith ((ungiven /->/ id) /->/ rep1 /->/ rep1) Data.mapWithKey
+mapWithKey :: (k -> a -> b) -> Map u k a -> Map u k b
+mapWithKey f (Mk ma) = Mk (Data.mapWithKey (coerce f) ma)
 
-traverseWithKey :: (Given (Sub k u), Applicative f) => (k -> a -> f b) -> Map u k a -> f (Map u k b)
-traverseWithKey = (fmap . fmap . fmap) coerce1 . upcastWith ((ungiven /->/ id) /->/ rep1 /->/ id) $
-  Data.traverseWithKey
+traverseWithKey :: (Applicative f) => (k -> a -> f b) -> Map u k a -> f (Map u k b)
+traverseWithKey f (Mk ma) = Mk <$> Data.traverseWithKey (coerce f) ma
 
-repMapKeys :: (Given (Sub k u), Given (Sub k' u))
-  => Sub ((u -> u) -> Data.Map u a -> Data.Map u a)
-         ((k -> k') -> Map u k a -> Map u k' a)
-repMapKeys = (ungiven /->/ given) /->/ rep1 /->/ rep1
+mapKeys :: (Ord u') => Sub u' k' -> (k -> k') -> Map u k a -> Map u' k' a
+mapKeys (Sub Coercion) f (Mk ma) = Mk (Data.mapKeys (coerce f) ma)
 
-mapKeys :: (Given (Sub k u), Given (Sub k' u), Ord u) => (k -> k') -> Map u k a -> Map u k' a
-mapKeys = upcastWith repMapKeys Data.mapKeys
-
-mapKeysWith :: (Given (Sub k u), Given (Sub k' u), Ord u) => (a -> a -> a) -> (k -> k') -> Map u k a -> Map u k' a
-mapKeysWith = upcastWith (id /->/ repMapKeys) Data.mapKeysWith
+mapKeysWith :: (Ord u') => Sub u' k' -> (a -> a -> a) -> (k -> k') -> Map u k a -> Map u' k' a
+mapKeysWith (Sub Coercion) op f (Mk ma) = Mk (Data.mapKeysWith op (coerce f) ma)
 
 -- * Filtering
 
 filter :: Ord u => (a -> Bool) -> Map u k a -> Map u k a
-filter = upcastWith (id /->/ rep1 /->/ rep1) Data.filter
+filter f (Mk ma) = Mk (Data.filter f ma)
 
-filterWithKey :: (Given (Sub k u), Ord u) => (k -> a -> Bool) -> Map u k a -> Map u k a
-filterWithKey = upcastWith ((ungiven /->/ id) /->/ rep1 /->/ rep1) Data.filterWithKey
+filterWithKey :: (Ord u) => (k -> a -> Bool) -> Map u k a -> Map u k a
+filterWithKey f (Mk ma) = Mk (Data.filterWithKey (coerce f) ma)
 
 mapMaybe :: Ord u => (a -> Maybe b) -> Map u k a -> Map u k b
-mapMaybe = upcastWith (id /->/ rep1 /->/ rep1) Data.mapMaybe
+mapMaybe f (Mk ma) = Mk (Data.mapMaybe f ma)
 
-mapMaybeWithKey :: (Given (Sub k u), Ord u) => (k -> a -> Maybe b) -> Map u k a -> Map u k b
-mapMaybeWithKey = upcastWith ((ungiven /->/ id) /->/ rep1 /->/ rep1) Data.mapMaybeWithKey
+mapMaybeWithKey :: (Ord u) => (k -> a -> Maybe b) -> Map u k a -> Map u k b
+mapMaybeWithKey f (Mk ma) = Mk (Data.mapMaybeWithKey (coerce f) ma)
 
-restrictKeysBy :: (Given (Sub k u), Ord u) => Map u k a -> Set u k' -> Map u k a
-restrictKeysBy = upcastWith (rep1 /->/ sub /->/ rep1) Data.restrictKeys
+restrictKeysBy :: (Ord u) => Map u k a -> Set u k' -> Map u k a
+restrictKeysBy (Mk ma) (Set.Mk us) = Mk (Data.restrictKeys ma us)
 
-restrictKeysTo :: (Given (Sub k' u), Ord u) => Map u k a -> Set u k' -> Map u k' a
-restrictKeysTo = upcastWith (rep1 /->/ sub /->/ rep1) Data.restrictKeys
+restrictKeysTo :: (Ord u) => Map u k a -> Set u k' -> Map u k' a
+restrictKeysTo (Mk ma) (Set.Mk us) = Mk (Data.restrictKeys ma us)
 
-tightRestrictKeys :: forall k k' u a.
-  (Given (Sub k u), Given (Sub k' u), Ord u)
-  => Map u k a -> Set u k' -> IntersectionMap u k k' a
-tightRestrictKeys m s =
-    let m' = Mk (Data.restrictKeys (coerce1 m) (coerce s)) :: Map u u a
-    in give (id :: Sub u u) (IntersectionMap (ungiven :: Sub u k) (ungiven :: Sub u k') m')
+tightRestrictKeys :: forall x y u a.
+  (Ord u)
+  => Map u x a -> Set u y -> IntersectionMap u x y a
+tightRestrictKeys (Mk ma) (Set.Mk us) =
+    let ma' = Mk (Data.restrictKeys ma us) :: Map u x a
+    in IntersectionMap (lesser sub :: IsIntersection x y x) ma'
 
-withoutKeys :: (Given (Sub k u), Ord u) => Map u k a -> Set u k' -> Map u k a
-withoutKeys = upcastWith (rep1 /->/ sub /->/ rep1) Data.withoutKeys
+withoutKeys :: (Ord u) => Map u k a -> Set u k' -> Map u k a
+withoutKeys (Mk ma) (Set.Mk us) = Mk (Data.withoutKeys ma us)
 
 -- * Combine
-union :: (Given (Sub k u), Ord u) => Map u k a -> Map u k a -> Map u k a
-union = upcastWith (rep1 /->/ rep1 /->/ rep1) Data.union
+union :: (Ord u) => Map u k a -> Map u k a -> Map u k a
+union (Mk m1) (Mk m2) = Mk (Data.union m1 m2)
 
-unionWith :: (Given (Sub k u), Ord u) => (a -> a -> a) -> Map u k a -> Map u k a -> Map u k a
-unionWith = upcastWith (id /->/ rep1 /->/ rep1 /->/ rep1) Data.unionWith
+unionWith :: (Ord u) => (a -> a -> a) -> Map u k a -> Map u k a -> Map u k a
+unionWith op (Mk m1) (Mk m2) = Mk (Data.unionWith op m1 m2)
 
-intersection :: (Given (Sub k u), Ord u) => Map u k a -> Map u k' b -> Map u k a
-intersection = upcastWith (rep1 /->/ rep1 /->/ rep1) Data.intersection
+data UnionMap u x y a where
+    UnionMap :: IsUnion x y z -> Map u z a -> UnionMap u x y a
 
-intersectionWith :: (Given (Sub k u), Ord u) => (a -> b -> c) -> Map u k a -> Map u k' b -> Map u k c
-intersectionWith = upcastWith (id /->/ rep1 /->/ rep1 /->/ rep1) Data.intersectionWith
+tightUnionWith :: forall u x y a. (Ord u)
+  => (a -> a -> a) -> Map u x a -> Map u y a -> UnionMap u x y a
+tightUnionWith op (Mk mx) (Mk my) =
+  let mz = Mk (Data.unionWith op mx my) :: Map u y a
+  in UnionMap (greater sub :: IsUnion x y y) mz
 
-data IntersectionMap u k k' a where
-    IntersectionMap :: Given (Sub k'' u) => Sub k'' k -> Sub k'' k' -> Map u k'' a -> IntersectionMap u k k' a
+intersection :: (Ord u) => Map u k a -> Map u k' b -> Map u k a
+intersection (Mk m1) (Mk m2) = Mk (Data.intersection m1 m2)
 
-tightIntersectionWith :: forall k k' u a b c.
-     (Given (Sub k u), Given (Sub k' u), Ord u)
-  => (a -> b -> c) -> Map u k a -> Map u k' b -> IntersectionMap u k k' c
-tightIntersectionWith op ma mb =
-  let mc = Mk (Data.intersectionWith op (coerce1 ma) (coerce1 mb)) :: Map u u c
-  in give (id :: Sub u u) (IntersectionMap (ungiven :: Sub u k) (ungiven :: Sub u k') mc)
+intersectionWith :: (Ord u) => (a -> b -> c) -> Map u k a -> Map u k' b -> Map u k c
+intersectionWith op (Mk m1) (Mk m2) = Mk (Data.intersectionWith op m1 m2)
 
-difference :: (Given (Sub k u), Ord u) => Map u k a -> Map u k' b -> Map u k a
-difference = upcastWith (rep1 /->/ rep1 /->/ rep1) Data.difference
+data IntersectionMap u x y a where
+    IntersectionMap :: IsIntersection x y z -> Map u z a -> IntersectionMap u x y a
 
-(\\) :: (Given (Sub k u), Ord u) => Map u k a -> Map u k b -> Map u k a
+tightIntersectionWith :: forall x y u a b c.
+     (Ord u)
+  => (a -> b -> c) -> Map u x a -> Map u y b -> IntersectionMap u x y c
+tightIntersectionWith op (Mk mx) (Mk my) =
+  let mz = Mk (Data.intersectionWith op mx my) :: Map u x c
+  in IntersectionMap (lesser sub :: IsIntersection x y x) mz
+
+difference :: (Ord u) => Map u k a -> Map u k' b -> Map u k a
+difference (Mk m1) (Mk m2) = Mk (Data.difference m1 m2)
+
+(\\) :: (Ord u) => Map u k a -> Map u k b -> Map u k a
 (\\) = difference
 
-differenceWith :: (Given (Sub k u), Ord u) => (a -> b -> Maybe a) -> Map u k a -> Map u k' b -> Map u k a
-differenceWith = upcastWith (id /->/ rep1 /->/ rep1 /->/ rep1) Data.differenceWith
+differenceWith :: (Ord u) => (a -> b -> Maybe a) -> Map u k a -> Map u k' b -> Map u k a
+differenceWith f (Mk m1) (Mk m2) = Mk (Data.differenceWith f m1 m2)
 
 infixl 9 \\
 
 -- * Composition
 
-compose :: (Given (Sub a u), Given (Sub b v), Ord v) => Map v b c -> Map u a b -> Map u a c
-compose = upcastWith (rep1 /->/ mapR given . rep1 /->/ rep1) Data.compose
+compose :: (Ord v) => Map v b c -> Map u a b -> Map u a c
+compose (Mk m1) (Mk m2) = Mk (Data.compose m1 (coerce m2))

@@ -21,10 +21,11 @@ library
     Newtype.Map,
     Newtype.Map.Internal,
     Newtype.Set,
-    Newtype.Set.Internal
+    Newtype.Set.Internal,
+    Newtype.Union,
+    Newtype.Intersection
   build-depends:       base >=4.11 && <4.17,
                        containers,
-                       reflection,
                        coercible-subtypes
   default-language:    Haskell2010
   ghc-options: -Wall
