@@ -25,7 +25,7 @@ type role Set nominal representational
 fromRawSet :: Data.Set u -> Set u u
 fromRawSet = Mk
 
-extractSub :: Set u k -> Sub u k
+extractSub :: Set u k -> Sub k u
 extractSub (Mk _) = sub
 
 deriving instance Eq u => Eq (Set u k)

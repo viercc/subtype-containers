@@ -28,7 +28,7 @@ type role Map nominal representational representational
 fromRawMap :: Data.Map u a -> Map u u a
 fromRawMap = Mk
 
-extractSub :: Map u k a -> Sub u k
+extractSub :: Map u k a -> Sub k u
 extractSub (Mk _) = sub
 
 deriving instance (Eq u, Eq a) => Eq (Map u k a)
