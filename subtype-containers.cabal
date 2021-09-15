@@ -11,7 +11,7 @@ author:              Koji Miyazato
 maintainer:          viercc@gmail.com
 category:            Data
 build-type:          Simple
-extra-source-files:  Readme.md, CHANGELOG.md
+extra-source-files:  README.md, CHANGELOG.md
 
 library
   hs-source-dirs: src
