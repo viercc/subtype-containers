@@ -19,7 +19,11 @@ library
     Newtype.Map,
     Newtype.Map.Internal,
     Newtype.Set,
-    Newtype.Set.Internal
+    Newtype.Set.Internal,
+    Newtype.IntMap,
+    Newtype.IntMap.Internal,
+    Newtype.IntSet,
+    Newtype.IntSet.Internal
   build-depends:       base >=4.11 && <4.17,
                        containers,
                        coercible-subtypes >= 0.2.0.0
