@@ -25,9 +25,11 @@ type role IntSet representational
 
 fromRawIntSet :: Data.IntSet -> IntSet Int
 fromRawIntSet = Mk
+{-# INLINABLE fromRawIntSet #-}
 
 extractSub :: IntSet k -> Sub k Int
 extractSub (Mk _) = sub
+{-# INLINABLE extractSub #-}
 
 deriving instance Eq (IntSet k)
 deriving instance Ord (IntSet k)
@@ -45,6 +47,8 @@ instance (Show k) => Show (IntSet k) where
 
 toAscList :: IntSet k -> [k]
 toAscList (Mk us) = coerce Data.toList us
+{-# INLINABLE toAscList #-}
 
 relax :: Sub k k' -> Sub (IntSet k) (IntSet k')
 relax (Sub Coercion) = sub
+{-# INLINABLE relax #-}

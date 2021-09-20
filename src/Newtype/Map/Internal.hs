@@ -27,9 +27,11 @@ type role Map nominal representational representational
 
 fromRawMap :: Data.Map u a -> Map u u a
 fromRawMap = Mk
+{-# INLINABLE fromRawMap #-}
 
 extractSub :: Map u k a -> Sub k u
 extractSub (Mk _) = sub
+{-# INLINABLE extractSub #-}
 
 deriving instance (Eq u, Eq a) => Eq (Map u k a)
 deriving instance (Ord u, Ord a) => Ord (Map u k a)
@@ -42,6 +44,8 @@ instance (Show k, Show a) => Show (Map u k a) where
 
 toAscList :: Map u k a -> [(k,a)]
 toAscList (Mk ma) = coerce (Data.toAscList ma)
+{-# INLINABLE toAscList #-}
 
 relaxKey :: Sub k k' -> Sub (Map u k a) (Map u k' a)
 relaxKey (Sub Coercion) = sub
+{-# INLINABLE relaxKey #-}

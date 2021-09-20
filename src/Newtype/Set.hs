@@ -75,6 +75,9 @@ empty (Sub Coercion) = Mk Data.empty
 singleton :: Sub k u -> k -> Set u k
 singleton (Sub Coercion) k = Mk (coerce Data.singleton k)
 
+{-# INLINABLE empty #-}
+{-# INLINABLE singleton #-}
+
 -- * Construction from lists
 
 fromList :: (Ord u) => Sub k u -> [k] -> Set u k
@@ -85,6 +88,10 @@ fromAscList (Sub Coercion) ks = Mk (coerce Data.fromAscList ks)
 
 fromDistinctAscList :: Sub k u -> [k] -> Set u k
 fromDistinctAscList (Sub Coercion) ks = Mk (coerce Data.fromDistinctAscList ks)
+
+{-# INLINABLE fromList #-}
+{-# INLINABLE fromAscList #-}
+{-# INLINABLE fromDistinctAscList #-}
 
 -- * Insertion/Deletion
 
@@ -97,6 +104,10 @@ delete k (Mk us) = Mk (coerce Data.delete k us)
 alterF :: (Ord u, Functor f) => (Bool -> f Bool) -> k -> Set u k -> f (Set u k)
 alterF f k (Mk us) = Mk <$> Data.alterF f (coerce k) us
 
+{-# INLINABLE insert #-}
+{-# INLINABLE delete #-}
+{-# INLINABLE alterF #-}
+
 -- * Query
 
 member, notMember :: (Ord u) => k -> Set u k -> Bool
@@ -106,12 +117,21 @@ notMember k = not . member k
 membership :: (Ord u) => u -> Set u k -> Maybe k
 membership u (Mk us) = coerce $ if Data.member u us then Just u else Nothing
 
+{-# INLINABLE member #-}
+{-# INLINABLE notMember #-}
+{-# INLINABLE membership #-}
+
 ulookupLT, ulookupGT, ulookupLE, ulookupGE
   :: (Ord u) => u -> Set u k -> Maybe k
 ulookupLT u (Mk us) = coerce Data.lookupLT u us
 ulookupLE u (Mk us) = coerce Data.lookupLE u us
 ulookupGT u (Mk us) = coerce Data.lookupGT u us
 ulookupGE u (Mk us) = coerce Data.lookupGE u us
+
+{-# INLINABLE ulookupLT #-}
+{-# INLINABLE ulookupGT #-}
+{-# INLINABLE ulookupLE #-}
+{-# INLINABLE ulookupGE #-}
 
 lookupLT, lookupGT, lookupLE, lookupGE
   :: (Ord u) => k -> Set u k -> Maybe k
@@ -120,6 +140,11 @@ lookupLE k (Mk us) = coerce Data.lookupLE k us
 lookupGT k (Mk us) = coerce Data.lookupGT k us
 lookupGE k (Mk us) = coerce Data.lookupGE k us
 
+{-# INLINABLE lookupLT #-}
+{-# INLINABLE lookupGT #-}
+{-# INLINABLE lookupLE #-}
+{-# INLINABLE lookupGE #-}
+
 -- * Size
 null :: Set u k -> Bool
 null = Data.null . toRawSet
@@ -127,11 +152,18 @@ null = Data.null . toRawSet
 size :: Set u k -> Int
 size = Data.size . toRawSet
 
+{-# INLINABLE null #-}
+{-# INLINABLE size #-}
+
 -- * Converting to
 elems, toList, toDescList :: Set u k -> [k]
 elems = toAscList
 toList = toAscList
 toDescList (Mk us) = coerce $ Data.toDescList us
+
+{-# INLINABLE elems #-}
+{-# INLINABLE toList #-}
+{-# INLINABLE toDescList #-}
 
 -- * Filter
 
@@ -143,6 +175,10 @@ map (Sub Coercion) f (Mk us) = Mk (Data.map (coerce f) us)
 
 mapMaybe :: (Ord u') => Sub k' u' -> (k -> Maybe k') -> Set u k -> Set u' k'
 mapMaybe k'u' f = fromList k'u' . Data.Maybe.mapMaybe f . toList
+
+{-# INLINABLE filter #-}
+{-# INLINABLE map #-}
+{-# INLINABLE mapMaybe #-}
 
 -- * Indexed
 
@@ -159,6 +195,12 @@ take, drop :: (Ord u) => Int -> Set u k -> Set u k
 take i (Mk us) = Mk (Data.take i us)
 drop i (Mk us) = Mk (Data.drop i us)
 
+{-# INLINABLE lookupIndex #-}
+{-# INLINABLE elemAt #-}
+{-# INLINABLE deleteAt #-}
+{-# INLINABLE take #-}
+{-# INLINABLE drop #-}
+
 -- * Combine
 union :: (Ord u) => Set u k -> Set u k -> Set u k
 union (Mk xs) (Mk ys) = Mk (Data.union xs ys)
@@ -170,6 +212,9 @@ tightUnion :: forall u x y. (Ord u) => Set u x -> Set u y -> UnionSet u x y
 tightUnion (Mk xs) (Mk ys) =
   let zs = Mk (Data.union xs ys) :: Set u y
   in UnionSet (greater sub :: IsUnion x y y) zs
+
+{-# INLINABLE union #-}
+{-# INLINABLE tightUnion #-}
 
 intersection :: (Ord u) => Set u k -> Set u k' -> Set u k
 intersection (Mk xs) (Mk ys) = Mk (Data.intersection xs ys)
@@ -183,6 +228,9 @@ tightIntersection (Mk xs) (Mk ys) =
   let zs = Mk (Data.intersection xs ys) :: Set u x
   in IntersectionSet (lesser sub :: IsIntersection x y x) zs
 
+{-# INLINABLE intersection #-}
+{-# INLINABLE tightIntersection #-}
+
 difference :: (Ord u) => Set u k -> Set u k' -> Set u k
 difference (Mk xs) (Mk ys) = Mk (xs Data.\\ ys)
 
@@ -191,8 +239,14 @@ difference (Mk xs) (Mk ys) = Mk (xs Data.\\ ys)
 
 infixl 9 \\
 
+{-# INLINABLE difference #-}
+{-# INLINABLE (\\) #-}
+
 cartesianProduct :: Set u a -> Set v b -> Set (u,v) (a,b)
 cartesianProduct (Mk us) (Mk vs) = Mk (Data.cartesianProduct us vs)
 
 disjointUnion :: Set u a -> Set v b -> Set (Either u v) (Either a b)
 disjointUnion (Mk us) (Mk vs) = Mk (Data.disjointUnion us vs)
+
+{-# INLINABLE cartesianProduct #-}
+{-# INLINABLE disjointUnion #-}

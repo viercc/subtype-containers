@@ -24,9 +24,11 @@ type role IntMap representational representational
 
 fromRawIntMap :: Data.IntMap a -> IntMap Int a
 fromRawIntMap = Mk
+{-# INLINABLE fromRawIntMap #-}
 
 extractSub :: IntMap k a -> Sub k Int
 extractSub (Mk _) = sub
+{-# INLINABLE extractSub #-}
 
 deriving instance (Eq a) => Eq (IntMap k a)
 deriving instance (Ord a) => Ord (IntMap k a)
@@ -39,6 +41,8 @@ instance (Show k, Show a) => Show (IntMap k a) where
 
 toAscList :: IntMap k a -> [(k,a)]
 toAscList (Mk ma) = coerce (Data.toAscList ma)
+{-# INLINABLE toAscList #-}
 
 relaxKey :: Sub k k' -> Sub (IntMap k a) (IntMap k' a)
 relaxKey (Sub Coercion) = sub
+{-# INLINABLE relaxKey #-}

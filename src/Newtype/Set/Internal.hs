@@ -25,9 +25,11 @@ type role Set nominal representational
 
 fromRawSet :: Data.Set u -> Set u u
 fromRawSet = Mk
+{-# INLINABLE fromRawSet #-}
 
 extractSub :: Set u k -> Sub k u
 extractSub (Mk _) = sub
+{-# INLINABLE extractSub #-}
 
 deriving instance Eq u => Eq (Set u k)
 deriving instance Ord u => Ord (Set u k)
@@ -47,6 +49,8 @@ instance Show k => Show (Set u k) where
 
 toAscList :: Set u k -> [k]
 toAscList (Mk us) = coerce Data.toAscList us
+{-# INLINABLE toAscList #-}
 
 relax :: Sub k k' -> Sub (Set u k) (Set u k')
 relax (Sub Coercion) = sub
+{-# INLINABLE relax #-}

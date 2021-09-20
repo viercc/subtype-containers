@@ -106,6 +106,10 @@ singleton (Sub Coercion) k a = Mk (Data.singleton (coerce k) a)
 fromSet :: (k -> a) -> IntSet k -> IntMap k a
 fromSet f (IntSet.Mk us) = Mk (Data.fromSet (coerce f) us)
 
+{-# INLINABLE empty #-}
+{-# INLINABLE singleton #-}
+{-# INLINABLE fromSet #-}
+
 -- * Construction from lists
 
 fromList :: Sub k Int -> [(k,a)] -> IntMap k a
@@ -123,6 +127,12 @@ fromAscList (Sub Coercion) kas = Mk (Data.fromAscList (coerce kas))
 fromDistinctAscList :: Sub k Int -> [(k,a)] -> IntMap k a
 fromDistinctAscList (Sub Coercion) kas = Mk (Data.fromDistinctAscList (coerce kas))
 
+{-# INLINABLE fromList #-}
+{-# INLINABLE fromListWith #-}
+{-# INLINABLE fromListWithKey #-}
+{-# INLINABLE fromAscList #-}
+{-# INLINABLE fromDistinctAscList #-}
+
 -- * Insertion
 
 insert :: k -> a -> IntMap k a -> IntMap k a
@@ -137,6 +147,11 @@ insertWithKey op k a (Mk ma) = Mk (Data.insertWithKey (coerce op) (coerce k) a m
 insertLookupWithKey :: (k -> a -> a -> a) -> k -> a -> IntMap k a -> (Maybe a, IntMap k a)
 insertLookupWithKey op k a (Mk ma) = case Data.insertLookupWithKey (coerce op) (coerce k) a ma of
   ~(resp, ma') -> (resp, Mk ma')
+
+{-# INLINABLE insert #-}
+{-# INLINABLE insertWith #-}
+{-# INLINABLE insertWithKey #-}
+{-# INLINABLE insertLookupWithKey #-}
 
 -- * Deletion/Update
 
@@ -160,6 +175,13 @@ alterF :: (Functor f)
   => (Maybe a -> f (Maybe a)) -> k -> IntMap k a -> f (IntMap k a)
 alterF f k (Mk ma) = Mk <$> Data.alterF f (coerce k) ma
 
+{-# INLINABLE delete #-}
+{-# INLINABLE adjust #-}
+{-# INLINABLE update #-}
+{-# INLINABLE updateLookupWithKey #-}
+{-# INLINABLE alter #-}
+{-# INLINABLE alterF #-}
+
 -- * Query
 
 lookup :: k -> IntMap k a -> Maybe a
@@ -180,12 +202,23 @@ ulookupAndKey u (Mk ma) = (coerce u, ) <$> Data.lookup u ma
 findWithDefault :: a -> k -> IntMap k a -> a
 findWithDefault a k m = fromMaybe a $ lookup k m
 
+{-# INLINABLE lookup #-}
+{-# INLINABLE ulookup #-}
+{-# INLINABLE ulookupAndKey #-}
+{-# INLINABLE (!?) #-}
+{-# INLINABLE (!) #-}
+{-# INLINABLE findWithDefault #-}
+
 membership :: Int -> IntMap k a -> Maybe k
 membership u (Mk ma) = coerce $ if Data.member u ma then Just u else Nothing
 
 member, notMember :: k -> IntMap k a -> Bool
 member k (Mk ma) = Data.member (coerce k) ma
 notMember k = not . member k
+
+{-# INLINABLE membership #-}
+{-# INLINABLE member #-}
+{-# INLINABLE notMember #-}
 
 ulookupLT, ulookupGT, ulookupLE, ulookupGE
   :: Int -> IntMap k a -> Maybe (k,a)
@@ -194,6 +227,11 @@ ulookupGT u (Mk ma) = coerce $ Data.lookupGT u ma
 ulookupLE u (Mk ma) = coerce $ Data.lookupLE u ma
 ulookupGE u (Mk ma) = coerce $ Data.lookupGE u ma
 
+{-# INLINABLE ulookupLT #-}
+{-# INLINABLE ulookupGT #-}
+{-# INLINABLE ulookupLE #-}
+{-# INLINABLE ulookupGE #-}
+
 lookupLT, lookupGT, lookupLE, lookupGE
   :: k -> IntMap k a -> Maybe (k,a)
 lookupLT k (Mk ma) = coerce $ Data.lookupLT (coerce k) ma
@@ -201,12 +239,20 @@ lookupGT k (Mk ma) = coerce $ Data.lookupGT (coerce k) ma
 lookupLE k (Mk ma) = coerce $ Data.lookupLE (coerce k) ma
 lookupGE k (Mk ma) = coerce $ Data.lookupGE (coerce k) ma
 
+{-# INLINABLE lookupLT #-}
+{-# INLINABLE lookupGT #-}
+{-# INLINABLE lookupLE #-}
+{-# INLINABLE lookupGE #-}
+
 -- * Size
 null :: IntMap k a -> Bool
 null = Data.null . toRawIntMap
 
 size :: IntMap k a -> Int
 size = Data.size . toRawIntMap
+
+{-# INLINABLE null #-}
+{-# INLINABLE size #-}
 
 -- * Conversion
 
@@ -228,6 +274,13 @@ toList = toAscList
 toDescList :: IntMap k a -> [(k,a)]
 toDescList (Mk ma) = coerce $ Data.toDescList ma
 
+{-# INLINABLE elems #-}
+{-# INLINABLE keys #-}
+{-# INLINABLE assocs #-}
+{-# INLINABLE keysSet #-}
+{-# INLINABLE toList #-}
+{-# INLINABLE toDescList #-}
+
 -- * Traversal/Map
 map :: (a -> b) -> IntMap k a -> IntMap k b
 map = fmap
@@ -244,6 +297,12 @@ mapKeys (Sub Coercion) f (Mk ma) = Mk (Data.mapKeys (coerce f) ma)
 mapKeysWith :: Sub k' Int -> (a -> a -> a) -> (k -> k') -> IntMap k a -> IntMap k' a
 mapKeysWith (Sub Coercion) op f (Mk ma) = Mk (Data.mapKeysWith op (coerce f) ma)
 
+{-# INLINABLE map #-}
+{-# INLINABLE mapWithKey #-}
+{-# INLINABLE traverseWithKey #-}
+{-# INLINABLE mapKeys #-}
+{-# INLINABLE mapKeysWith #-}
+
 -- * Filtering
 
 filter :: (a -> Bool) -> IntMap k a -> IntMap k a
@@ -257,6 +316,11 @@ mapMaybe f (Mk ma) = Mk (Data.mapMaybe f ma)
 
 mapMaybeWithKey ::  (k -> a -> Maybe b) -> IntMap k a -> IntMap k b
 mapMaybeWithKey f (Mk ma) = Mk (Data.mapMaybeWithKey (coerce f) ma)
+
+{-# INLINABLE filter #-}
+{-# INLINABLE filterWithKey #-}
+{-# INLINABLE mapMaybe #-}
+{-# INLINABLE mapMaybeWithKey #-}
 
 restrictKeysBy ::  IntMap k a -> IntSet k' -> IntMap k a
 restrictKeysBy (Mk ma) (IntSet.Mk us) = Mk (Data.restrictKeys ma us)
@@ -272,6 +336,11 @@ tightRestrictKeys (Mk ma) (IntSet.Mk us) =
 
 withoutKeys ::  IntMap k a -> IntSet k' -> IntMap k a
 withoutKeys (Mk ma) (IntSet.Mk us) = Mk (Data.withoutKeys ma us)
+
+{-# INLINABLE restrictKeysBy #-}
+{-# INLINABLE restrictKeysTo #-}
+{-# INLINABLE tightRestrictKeys #-}
+{-# INLINABLE withoutKeys #-}
 
 -- * Combine
 union ::  IntMap k a -> IntMap k a -> IntMap k a
@@ -289,6 +358,10 @@ tightUnionWith op (Mk mx) (Mk my) =
   let mz = Mk (Data.unionWith op mx my) :: IntMap y a
   in UnionIntMap (greater sub :: IsUnion x y y) mz
 
+{-# INLINABLE union #-}
+{-# INLINABLE unionWith #-}
+{-# INLINABLE tightUnionWith #-}
+
 intersection ::  IntMap k a -> IntMap k' b -> IntMap k a
 intersection (Mk m1) (Mk m2) = Mk (Data.intersection m1 m2)
 
@@ -304,6 +377,10 @@ tightIntersectionWith op (Mk mx) (Mk my) =
   let mz = Mk (Data.intersectionWith op mx my) :: IntMap x c
   in IntersectionIntMap (lesser sub :: IsIntersection x y x) mz
 
+{-# INLINABLE intersection #-}
+{-# INLINABLE intersectionWith #-}
+{-# INLINABLE tightIntersectionWith #-}
+
 difference ::  IntMap k a -> IntMap k' b -> IntMap k a
 difference (Mk m1) (Mk m2) = Mk (Data.difference m1 m2)
 
@@ -315,7 +392,13 @@ differenceWith f (Mk m1) (Mk m2) = Mk (Data.differenceWith f m1 m2)
 
 infixl 9 \\
 
+{-# INLINABLE difference #-}
+{-# INLINABLE (\\) #-}
+{-# INLINABLE differenceWith #-}
+
 -- * Composition
 
 compose :: IntMap b c -> IntMap a b -> IntMap a c
 compose (Mk m1) (Mk m2) = Mk (Data.compose m1 (coerce m2))
+
+{-# INLINABLE compose #-}
