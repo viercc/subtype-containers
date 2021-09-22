@@ -20,7 +20,7 @@ import qualified Data.IntSet as Data
 import Data.Foldable
 
 data IntSet k where
-  Mk :: Coercible k Int => { toRawIntSet :: Data.IntSet } -> IntSet k
+  Mk :: Coercible k Int => { toRawIntSet :: !Data.IntSet } -> IntSet k
 type role IntSet representational
 
 fromRawIntSet :: Data.IntSet -> IntSet Int

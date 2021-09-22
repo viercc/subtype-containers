@@ -22,7 +22,7 @@ import Data.Type.Coercion ( Coercion(Coercion) )
 import qualified Data.Map.Lazy as Data
 
 data Map u k a where
-  Mk :: Coercible k u => { toRawMap :: Data.Map u a } -> Map u k a
+  Mk :: Coercible k u => { toRawMap :: !(Data.Map u a) } -> Map u k a
 type role Map nominal representational representational
 
 fromRawMap :: Data.Map u a -> Map u u a

@@ -19,7 +19,7 @@ import Data.Type.Coercion
 import qualified Data.IntMap.Lazy as Data
 
 data IntMap k a where
-  Mk :: Coercible k Int => { toRawIntMap :: Data.IntMap a } -> IntMap k a
+  Mk :: Coercible k Int => { toRawIntMap :: !(Data.IntMap a) } -> IntMap k a
 type role IntMap representational representational
 
 fromRawIntMap :: Data.IntMap a -> IntMap Int a
